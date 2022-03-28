@@ -25,13 +25,14 @@ int main()
     std::string b;
     int c;
 
+    // Take out in reverse order
     result >> a >> b >> c;
 
     return 0;
 }
 ```
 
-[Compiler Explorer](https://godbolt.org/z/ehE6fhY7x)
+[Compiler Explorer](https://godbolt.org/z/vrTr4qGd7)
 
 ### Message Transfer
 
@@ -40,4 +41,5 @@ int main()
 
 ## Reference
 
+- [MessagePack](https://github.com/msgpack/msgpack/blob/master/spec.md)
 - [Better Code: Concurrency - Sean Parent](https://www.youtube.com/watch?v=zULU6Hhp42w)

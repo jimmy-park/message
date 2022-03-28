@@ -11,6 +11,18 @@
 
 namespace detail {
 
+enum class endian {
+#ifdef _WIN32
+    little = 0,
+    big = 1,
+    native = little
+#else
+    little = __ORDER_LITTLE_ENDIAN__,
+    big = __ORDER_BIG_ENDIAN__,
+    native = __BYTE_ORDER__
+#endif
+};
+
 template <typename, typename = void>
 inline constexpr bool is_container_like = false;
 
@@ -108,18 +120,21 @@ void SerializeInt(std::vector<std::uint8_t>& buffer, T value)
 {
     static_assert(std::is_integral_v<T>);
 
-    // value = hton(value);
+    if constexpr (endian::native == endian::little && sizeof(T) != 1) {
+        // value = hton(value);
+    }
+
     const auto* ptr = reinterpret_cast<const std::uint8_t*>(&value);
 
     buffer.insert(std::cend(buffer), ptr, ptr + sizeof(T));
 }
 
 template <typename T>
-void SerializeArray(std::vector<std::uint8_t>& buffer, const T& value)
+void SerializeArray(std::vector<std::uint8_t>& buffer, const T& container)
 {
     static_assert(detail::is_array_like<T>);
 
-    const auto container_size = std::size(value);
+    const auto container_size = std::size(container);
     const auto array_size = CalculateArraySize(container_size);
 
     switch (array_size) {
@@ -139,10 +154,25 @@ void SerializeArray(std::vector<std::uint8_t>& buffer, const T& value)
         assert(false);
     }
 
-    const auto value_size = container_size * sizeof(typename T::value_type);
-    const auto* value_ptr = reinterpret_cast<const std::uint8_t*>(std::data(value));
+    if constexpr (endian::native == endian::little && sizeof(typename T::value_type) != 1) {
+        T copy;
 
-    buffer.insert(std::cend(buffer), value_ptr, value_ptr + value_size);
+        copy.reserve(container_size);
+        std::transform(std::cbegin(container), std::cend(container), std::back_inserter(copy), [](auto value) {
+            // return hton(value);
+            return value;
+        });
+
+        const auto value_size = container_size * sizeof(typename T::value_type);
+        const auto* value_ptr = reinterpret_cast<const std::uint8_t*>(std::data(copy));
+
+        buffer.insert(std::cend(buffer), value_ptr, value_ptr + value_size);
+    } else {
+        const auto value_size = container_size * sizeof(typename T::value_type);
+        const auto* value_ptr = reinterpret_cast<const std::uint8_t*>(std::data(container));
+
+        buffer.insert(std::cend(buffer), value_ptr, value_ptr + value_size);
+    }
 }
 
 std::pair<Message::Item, std::uint8_t> Decode(std::uint8_t code)
@@ -211,47 +241,55 @@ T DeserializeInt(const std::uint8_t* first)
 {
     static_assert(std::is_integral_v<T>);
 
-    T value {};
+    T value;
     auto* ptr = reinterpret_cast<std::uint8_t*>(&value);
 
     std::memcpy(ptr, first, sizeof(T));
 
-    // value = ntoh(value);
+    if constexpr (endian::native == endian::little && sizeof(T) != 1) {
+        // value =  ntoh(value);
+    }
+
     return value;
 }
 
 template <typename T>
-std::size_t DeserializeArray(T& value, const std::uint8_t* first, std::uint8_t array_size)
+std::size_t DeserializeArray(T& container, const std::uint8_t* first, std::uint8_t array_size)
 {
     static_assert(detail::is_array_like<T>);
 
-    std::size_t container_size {};
+    auto container_size = [first, array_size]() -> std::size_t {
+        switch (array_size) {
+        case 0b0001:
+            return DeserializeInt<std::uint8_t>(first);
+        case 0b0010:
+            return DeserializeInt<std::uint16_t>(first);
+        case 0b0100:
+            return DeserializeInt<std::uint32_t>(first);
+        case 0b1000:
+            return static_cast<std::size_t>(DeserializeInt<std::uint64_t>(first));
+        default:
+            assert(false);
+            return 0;
+        }
+    }();
 
-    switch (array_size) {
-    case 0b0001:
-        container_size = DeserializeInt<std::uint8_t>(first);
-        first += sizeof(std::uint8_t);
-        break;
-    case 0b0010:
-        container_size = DeserializeInt<std::uint16_t>(first);
-        first += sizeof(std::uint16_t);
-        break;
-    case 0b0100:
-        container_size = DeserializeInt<std::uint32_t>(first);
-        first += sizeof(std::uint32_t);
-        break;
-    case 0b1000:
-        container_size = static_cast<std::size_t>(DeserializeInt<std::uint64_t>(first));
-        first += sizeof(std::uint64_t);
-        break;
-    default:
-        assert(false);
+    const auto* ptr = reinterpret_cast<const typename T::value_type*>(first + array_size);
+
+    container.reserve(container_size);
+    container.assign(ptr, ptr + container_size);
+
+    if constexpr (endian::native == endian::little && sizeof(typename T::value_type) != 1) {
+        std::transform(
+            std::execution::par_unseq,
+            std::begin(container),
+            std::end(container),
+            std::begin(container),
+            [](auto value) {
+                // return ntoh(value);
+                return value;
+            });
     }
-
-    const auto* ptr = reinterpret_cast<const typename T::value_type*>(first);
-
-    value.reserve(container_size);
-    value.assign(ptr, ptr + container_size);
 
     return array_size + container_size * sizeof(typename T::value_type);
 }
