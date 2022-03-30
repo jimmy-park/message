@@ -32,7 +32,7 @@ int main()
 }
 ```
 
-[Compiler Explorer](https://godbolt.org/z/vrTr4qGd7)
+[Compiler Explorer](https://godbolt.org/z/cqPv4zfjj)
 
 ### Message Transfer
 

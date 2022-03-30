@@ -4,19 +4,11 @@
 #include <cstdint>
 
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
 
-static constexpr auto kDefaultMessageSize = 10;
-
-namespace detail {
-
-template <typename T>
-using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
-
-} // namespace detail
+#include "type_traits.h"
 
 struct Message {
     using Item = std::variant<
@@ -25,7 +17,9 @@ struct Message {
     using Items = std::vector<Item>;
 
     // Number of types is limited due to encoding
-    static_assert(std::variant_size_v<Item> <= 0b0000'1111);
+    static_assert(std::variant_size_v<Item> <= 0x0F);
+
+    static constexpr auto kDefaultMessageSize = 10;
 
     ~Message() = default;
     Message(const Message&) = delete;
@@ -54,7 +48,7 @@ struct Message {
     template <typename Value>
     friend Message& operator<<(Message& message, Value&& value)
     {
-        using T = detail::remove_cvref_t<Value>;
+        using T = type_traits::remove_cvref_t<Value>;
         static_assert(std::is_constructible_v<Item, T> || std::is_constructible_v<std::string, T> || std::is_enum_v<T>);
 
         if constexpr (std::is_constructible_v<std::string, T>) {
