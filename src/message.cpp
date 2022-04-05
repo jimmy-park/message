@@ -9,7 +9,7 @@
 #include <limits>
 #include <numeric>
 
-#include "bit.h"
+#include "util/bit.h"
 
 namespace detail {
 

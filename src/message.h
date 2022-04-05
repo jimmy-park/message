@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 
-#include "type_traits.h"
+#include "util/type_traits.h"
 
 struct Message {
     using Item = std::variant<
