@@ -37,6 +37,28 @@ int main()
 ### Message Transfer
 
 ```cpp
+#include "example/client.h"
+
+int main()
+{
+    Client client_a { "A" }, client_b { "B" };
+
+    for (std::string line; std::getline(std::cin, line);) {
+        if (line.empty())
+            break;
+
+        // Equivalent to
+        //
+        // Message msg;
+        // msg.from = "A";
+        // msg.to = "B";
+        // msg << line;
+        // MessageRouter::GetInstance().Post(std::move(msg));
+        client_a.Send("B", line);
+    }
+
+    return 0;
+}
 ```
 
 ## Reference
