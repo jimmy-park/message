@@ -2,9 +2,9 @@
 #define CONCURRENT_QUEUE_H_
 
 #include <condition_variable>
-#include <mutex>
 #include <optional>
 #include <queue>
+#include <shared_mutex>
 #include <utility>
 
 template <typename T>
@@ -12,14 +12,14 @@ class ConcurrentQueue {
 public:
     bool Empty() const
     {
-        std::lock_guard lock { mutex_ };
+        std::shared_lock lock { mutex_ };
 
         return queue_.empty();
     }
 
     auto Size() const
     {
-        std::lock_guard lock { mutex_ };
+        std::shared_lock lock { mutex_ };
 
         return queue_.size();
     }
@@ -132,8 +132,8 @@ public:
 private:
     bool done_ { false };
     std::queue<T> queue_;
-    mutable std::mutex mutex_;
-    std::condition_variable cv_;
+    mutable std::shared_mutex mutex_;
+    std::condition_variable_any cv_;
 };
 
 #endif // CONCURRENT_QUEUE_H_

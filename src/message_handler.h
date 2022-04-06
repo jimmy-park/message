@@ -2,7 +2,6 @@
 #define MESSAGE_HANDLER_H_
 
 #include "message.h"
-#include "util/tasker.h"
 
 struct AbstractMessageHandler {
     virtual ~AbstractMessageHandler() = default;
@@ -11,11 +10,9 @@ struct AbstractMessageHandler {
 
 template <typename Derived>
 class MessageHandler : public AbstractMessageHandler {
-public:
-    void Post(Message message) override { lopper_.Post(std::move(message)); }
-
-private:
-    Looper<Message> lopper_ { [this](auto message) { static_cast<Derived*>(this)->OnMessage(std::move(message)); } };
+protected:
+    void Post(Message message) override { static_cast<Derived*>(this)->Post(std::move(message)); }
+    void OnMessage(Message message) { static_cast<Derived*>(this)->OnMessage(std::move(message)); }
 };
 
 #endif // MESSAGE_HANDLER_H_

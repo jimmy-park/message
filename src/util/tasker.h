@@ -1,6 +1,7 @@
 #ifndef TASKER_H_
 #define TASKER_H_
 
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <future>
@@ -68,34 +69,32 @@ public:
 private:
     void Run(std::size_t index)
     {
-        auto steal_task = [this](auto index) {
-            for (std::size_t n = 0; n < count_; ++n) {
-                auto next = (index + n >= count_) ? (index + n - count_) : (index + n);
-                if (auto value = queues_[next].TryPop()) {
+        std::vector<std::reference_wrapper<ConcurrentQueue<T>>> queues_ref { std::begin(queues_), std::end(queues_) };
+
+        std::rotate(std::begin(queues_ref), std::next(std::begin(queues_ref), index), std::end(queues_ref));
+
+        while (true) {
+            // Steal task
+            for (auto& queue : queues_ref) {
+                if (auto value = queue.get().TryPop()) {
                     function_(*std::move(value));
-                    return true;
+                    continue;
                 }
             }
-            return false;
-        };
 
-        auto wait_task = [this](auto index) {
-            if (auto value = queues_[index].Pop()) {
+            if (auto value = queues_ref.front().get().Pop()) {
                 function_(*std::move(value));
-                return true;
+            } else {
+                break;
             }
-
-            return false;
-        };
-
-        while (steal_task(index) || wait_task(index)) { }
+        }
     }
 
     std::size_t count_ { N != 0 ? N : std::max(1u, std::thread::hardware_concurrency()) };
     std::atomic_size_t index_ { 0 };
+    std::function<void(T)> function_;
     std::vector<ConcurrentQueue<T>> queues_ { count_ };
     std::vector<std::future<void>> taskers_;
-    std::function<void(T)> function_;
 };
 
 template <typename T>
@@ -104,8 +103,8 @@ public:
     template <typename Function>
     Tasker(Function function)
         : function_ { std::move(function) }
+        , tasker_ { std::async(std::launch::async, &Tasker::Run, this) }
     {
-        tasker_ = std::async(std::launch::async, &Tasker::Run, this);
     }
 
     ~Tasker()
@@ -147,9 +146,9 @@ private:
         while (wait_task()) { }
     }
 
+    std::function<void(T)> function_;
     ConcurrentQueue<T> queue_;
     std::future<void> tasker_;
-    std::function<void(T)> function_;
 };
 
 template <typename T>

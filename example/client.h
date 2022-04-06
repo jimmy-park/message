@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "../src/message_handler.h"
+#include "../src/util/tasker.h"
 
 class Client : public MessageHandler<Client> {
 public:
@@ -16,9 +17,13 @@ public:
 private:
     friend MessageHandler;
 
+    void Post(Message message);
     void OnMessage(Message message);
 
     std::string id_;
+
+    // Need to release before other member variable
+    Tasker<Message> tasker_;
 };
 
 #endif // CLIENT_H_

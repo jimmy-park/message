@@ -7,6 +7,7 @@
 
 #include "message_handler.h"
 #include "util/singleton.h"
+#include "util/tasker.h"
 
 class MessageRouter : public Singleton<MessageRouter> {
 public:
@@ -24,9 +25,9 @@ public:
 private:
     void OnMessage(Message message);
 
-    Tasker<Message> tasker_;
     std::unordered_map<std::string_view, AbstractMessageHandler*> handlers_;
     std::shared_mutex mutex_;
+    Tasker<Message> tasker_;
 };
 
 #endif // MESSAGE_ROUTER_H_
