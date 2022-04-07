@@ -4,9 +4,11 @@
 #include <cstddef>
 #include <cstring>
 
-#include <execution>
+#include <algorithm>
+#include <array>
 #include <functional>
 #include <limits>
+#include <memory_resource>
 #include <numeric>
 
 #include "util/bit.h"
@@ -48,7 +50,6 @@ constexpr std::uint8_t CalculateArraySize(T value)
 std::size_t CalculateTotalSize(const Message::Items& items)
 {
     return std::transform_reduce(
-        std::execution::par_unseq,
         std::cbegin(items),
         std::cend(items),
         std::size(items),
@@ -145,9 +146,13 @@ void SerializeArray(std::vector<std::uint8_t>& buffer, const T& container)
     }
 
     if constexpr (bit::endian::native == bit::endian::little && sizeof(typename T::value_type) != 1) {
-        auto copy = container;
+        static constexpr std::size_t kBufferSize { 1024 * sizeof(typename T::value_type) };
+
+        std::array<std::byte, kBufferSize> stack_buffer;
+        std::pmr::monotonic_buffer_resource mbr { std::data(stack_buffer), std::size(stack_buffer) };
+        std::pmr::vector<typename T::value_type> copy { std::cbegin(container), std::cend(container), &mbr };
+
         std::transform(
-            std::execution::par_unseq,
             std::begin(copy),
             std::end(copy),
             std::begin(copy),
@@ -266,7 +271,6 @@ std::size_t DeserializeArray(T& container, const std::uint8_t* first, std::uint8
 
     if constexpr (bit::endian::native == bit::endian::little && sizeof(typename T::value_type) != 1) {
         std::transform(
-            std::execution::par_unseq,
             std::begin(container),
             std::end(container),
             std::begin(container),
@@ -283,8 +287,10 @@ std::vector<std::uint8_t> Message::Serialize(const Message& message)
     std::vector<std::uint8_t> buffer;
 
     const auto& items = message.body;
-    const auto total_size = detail::CalculateTotalSize(items);
+    const auto total_size = 1 /* item_count */ + detail::CalculateTotalSize(items);
+
     buffer.reserve(total_size);
+    buffer.emplace_back(static_cast<std::uint8_t>(std::min(0xFFu, std::size(items))));
 
     for (const auto& item : items) {
         const auto code = detail::Encode(item);
@@ -309,9 +315,13 @@ std::vector<std::uint8_t> Message::Serialize(const Message& message)
 
 Message Message::Deserialize(const std::vector<std::uint8_t>& buffer)
 {
-    Message message;
+    if (buffer.empty() || buffer.front() == 0)
+        return {};
 
-    for (auto first = std::data(buffer), last = first + std::size(buffer); first != last;) {
+    Message message;
+    message.body.reserve(buffer.front());
+
+    for (auto first = std::data(buffer) + 1, last = first - 1 + std::size(buffer); first != last;) {
         auto [item, size] = detail::Decode(*first);
         ++first;
 

@@ -19,18 +19,12 @@ struct Message {
     // Number of types is limited due to encoding
     static_assert(std::variant_size_v<Item> <= 0x0F);
 
-    static constexpr auto kDefaultMessageSize = 10;
-
+    Message() = default;
     ~Message() = default;
     Message(const Message&) = delete;
     Message(Message&&) noexcept = default;
     Message& operator=(const Message&) = delete;
     Message& operator=(Message&&) noexcept = default;
-
-    Message()
-    {
-        body.reserve(kDefaultMessageSize);
-    }
 
     template <typename Id, typename... Values>
     Message(Id id, Values&&... values)
@@ -40,7 +34,7 @@ struct Message {
         auto& self = *this;
 
         self.id = static_cast<std::uint16_t>(id);
-        self.body.reserve(sizeof...(values) != 0 ? sizeof...(values) : kDefaultMessageSize);
+        self.body.reserve(sizeof...(values));
 
         (self << ... << std::forward<Values>(values));
     }
