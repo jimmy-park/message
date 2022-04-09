@@ -6,7 +6,7 @@
 #include <unordered_map>
 
 #include "message_handler.h"
-#include "util/singleton.h"
+#include "singleton.h"
 #include "util/tasker.h"
 
 class MessageRouter : public Singleton<MessageRouter> {
