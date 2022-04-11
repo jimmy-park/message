@@ -12,6 +12,7 @@ Implement messaging system using C++17 features (std::variant, std::execution, .
 int main()
 {
     Message msg { /* id, value1, value2, ... */ };
+    msg.body.reserve(3);
     msg << 123
         << "abc"
         << std::vector<int> { 1, 2, 3, 4, 5 };
@@ -19,20 +20,20 @@ int main()
     auto buffer = Message::Serialize(msg);
     auto result = Message::Deserialize(buffer);
 
-    assert(msg.body == result.body);
+    assert(msg.body == result->body)
 
     std::vector<int> a;
     std::string b;
     int c;
 
     // Take out in reverse order
-    result >> a >> b >> c;
+    *result >> a >> b >> c;
 
     return 0;
 }
 ```
 
-[Compiler Explorer](https://godbolt.org/z/cqPv4zfjj)
+[Compiler Explorer](https://godbolt.org/z/E511WWKeK)
 
 ### Message Transfer
 

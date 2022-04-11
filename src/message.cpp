@@ -309,7 +309,7 @@ std::vector<std::uint8_t> Message::Serialize(const Message& message)
 
     if (total_size != 1) {
         buffer.reserve(total_size);
-        buffer.emplace_back(static_cast<std::uint8_t>(std::min(0xFFu, std::size(items))));
+        buffer.emplace_back(static_cast<std::uint8_t>(std::min(std::size_t { 0xFF }, std::size(items))));
     }
 
     for (const auto& item : items) {
