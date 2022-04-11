@@ -1,3 +1,6 @@
 [submodule "singleton"]
 	path = singleton
 	url = https://github.com/jimmy-park/singleton.git
+[submodule "tasker"]
+	path = tasker
+	url = https://github.com/jimmy-park/tasker.git
