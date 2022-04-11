@@ -5,9 +5,10 @@
 #include <string_view>
 #include <unordered_map>
 
-#include "message_handler.h"
 #include "singleton.h"
-#include "util/tasker.h"
+#include "tasker.h"
+
+#include "message_handler.h"
 
 class MessageRouter : public Singleton<MessageRouter> {
 public:
