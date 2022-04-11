@@ -13,7 +13,7 @@ namespace bit {
 
 namespace detail {
 
-    std::uint16_t byteswap_u16(std::uint16_t value) noexcept
+    inline std::uint16_t byteswap_u16(std::uint16_t value) noexcept
     {
 #ifdef _MSC_VER
         return _byteswap_ushort(value);
@@ -24,7 +24,7 @@ namespace detail {
 #endif
     }
 
-    std::uint32_t byteswap_u32(std::uint32_t value) noexcept
+    inline std::uint32_t byteswap_u32(std::uint32_t value) noexcept
     {
 #ifdef _MSC_VER
         return _byteswap_ulong(value);
@@ -35,7 +35,7 @@ namespace detail {
 #endif
     }
 
-    std::uint64_t byteswap_u64(std::uint64_t value) noexcept
+    inline std::uint64_t byteswap_u64(std::uint64_t value) noexcept
     {
 #ifdef _MSC_VER
         return _byteswap_uint64(value);
@@ -47,27 +47,27 @@ namespace detail {
 #endif
     }
 
-} // namespace detail
+    template <typename T>
+    constexpr T byteswap(T value) noexcept
+    {
+        static_assert(std::is_integral_v<T>);
 
-template <typename T>
-constexpr T byteswap(T value) noexcept
-{
-    static_assert(std::is_integral_v<T>);
+        using U = std::make_unsigned_t<T>;
 
-    using U = std::make_unsigned_t<T>;
-
-    if constexpr (sizeof(T) == 1) {
-        return value;
-    } else if constexpr (sizeof(T) == 2) {
-        return static_cast<T>(detail::byteswap_u16(static_cast<U>(value)));
-    } else if constexpr (sizeof(T) == 4) {
-        return static_cast<T>(detail::byteswap_u32(static_cast<U>(value)));
-    } else if constexpr (sizeof(T) == 8) {
-        return static_cast<T>(detail::byteswap_u64(static_cast<U>(value)));
-    } else {
-        static_assert(type_traits::always_false_v<T>);
+        if constexpr (sizeof(T) == 1) {
+            return value;
+        } else if constexpr (sizeof(T) == 2) {
+            return static_cast<T>(detail::byteswap_u16(static_cast<U>(value)));
+        } else if constexpr (sizeof(T) == 4) {
+            return static_cast<T>(detail::byteswap_u32(static_cast<U>(value)));
+        } else if constexpr (sizeof(T) == 8) {
+            return static_cast<T>(detail::byteswap_u64(static_cast<U>(value)));
+        } else {
+            static_assert(type_traits::always_false_v<T>);
+        }
     }
-}
+
+} // namespace detail
 
 enum class endian {
 #ifdef _MSC_VER
@@ -82,24 +82,20 @@ enum class endian {
 };
 
 template <typename T>
-struct hton_t {
-    constexpr T operator()(const T& value) const
-    {
-        if constexpr (endian::native == endian::little)
-            return byteswap(value);
-        else
-            return value;
+constexpr T hton(T value) noexcept
+{
+    if constexpr (endian::native == endian::little) {
+        return detail::byteswap(value);
+    } else {
+        return value;
     }
-};
+}
 
 template <typename T>
-using ntoh_t = hton_t<T>;
-
-template <typename T>
-inline constexpr auto hton = hton_t<T> {};
-
-template <typename T>
-inline constexpr auto ntoh = hton<T>;
+constexpr T ntoh(T value) noexcept
+{
+    return hton(value);
+}
 
 } // namespace bit
 

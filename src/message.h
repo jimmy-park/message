@@ -3,6 +3,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -12,6 +13,7 @@
 
 struct Message {
     using Item = std::variant<
+        /* Default type */ std::monostate,
         /* Integer type */ bool, char, std::int8_t, std::uint8_t, std::int16_t, std::uint16_t, std::int32_t, std::uint32_t, std::int64_t, std::uint64_t,
         /* Array type   */ std::vector<std::uint8_t>, std::vector<int>, std::string>;
     using Items = std::vector<Item>;
@@ -75,7 +77,7 @@ struct Message {
     }
 
     static std::vector<std::uint8_t> Serialize(const Message& message);
-    static Message Deserialize(const std::vector<std::uint8_t>& buffer);
+    static std::optional<Message> Deserialize(const std::vector<std::uint8_t>& buffer);
 
     std::string from;
     std::string to;
