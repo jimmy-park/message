@@ -15,20 +15,8 @@
 
 namespace detail {
 
-template <typename, typename = void>
-inline constexpr bool is_container_like = false;
-
 template <typename T>
-inline constexpr bool is_container_like<T, std::void_t<typename T::value_type, decltype(std::declval<T>().size())>> = true;
-
-template <typename, typename = void>
-inline constexpr bool has_contiguous_memory = false;
-
-template <typename T>
-inline constexpr bool has_contiguous_memory<T, std::void_t<typename T::iterator::iterator_category>> = std::is_same_v<typename T::iterator::iterator_category, std::random_access_iterator_tag>;
-
-template <typename T>
-inline constexpr bool is_array_like = is_container_like<T>&& has_contiguous_memory<T>;
+inline constexpr bool is_array_like = type_traits::is_vector_v<T> || std::is_same_v<T, std::string>;
 
 template <typename T>
 constexpr std::uint8_t CalculateArraySize(T value)
@@ -104,7 +92,6 @@ std::uint8_t Encode(const Message::Item& item)
             if constexpr (std::is_integral_v<T>) {
                 return 0;
             } else if constexpr (detail::is_array_like<T>) {
-                assert(std::size(value) != 0);
                 return CalculateArraySize(std::size(value));
             } else {
                 return 0;
@@ -120,11 +107,15 @@ void SerializeInt(std::vector<std::uint8_t>& buffer, T value)
 {
     static_assert(std::is_integral_v<T>);
 
-    if constexpr (bit::endian::native == bit::endian::little && sizeof(T) != 1)
-        value = bit::hton(value);
+    if constexpr (sizeof(T) == 1) {
+        buffer.emplace_back(static_cast<std::uint8_t>(value));
+    } else {
+        if constexpr (bit::endian::native == bit::endian::little && sizeof(T) != 1)
+            value = bit::hton(value);
 
-    const auto* ptr = reinterpret_cast<const std::uint8_t*>(&value);
-    buffer.insert(std::cend(buffer), ptr, ptr + sizeof(T));
+        const auto* ptr = reinterpret_cast<const std::uint8_t*>(&value);
+        buffer.insert(std::cend(buffer), ptr, ptr + sizeof(T));
+    }
 }
 
 template <typename T>
@@ -137,22 +128,25 @@ void SerializeArray(std::vector<std::uint8_t>& buffer, const T& container)
     const auto value_size = container_size * sizeof(typename T::value_type);
 
     switch (array_size) {
-    case 0b0001:
+    case 1:
         SerializeInt(buffer, static_cast<std::uint8_t>(container_size));
         break;
-    case 0b0010:
+    case 2:
         SerializeInt(buffer, static_cast<std::uint16_t>(container_size));
         break;
-    case 0b0100:
+    case 4:
         SerializeInt(buffer, static_cast<std::uint32_t>(container_size));
         break;
-    case 0b1000:
+    case 8:
         SerializeInt(buffer, static_cast<std::uint64_t>(container_size));
         break;
     default:
         assert(false);
         break;
     }
+
+    if (container_size == 0)
+        return;
 
     if constexpr (bit::endian::native == bit::endian::little && sizeof(typename T::value_type) != 1) {
         static constexpr std::size_t kBufferSize { 1024 * sizeof(typename T::value_type) };
@@ -227,7 +221,7 @@ std::pair<Message::Item, std::uint8_t> Decode(std::uint8_t code)
         break;
     // Default type
     default:
-        //item.emplace<0>();
+        // item.emplace<0>();
         assert(false);
         break;
     }
@@ -250,15 +244,19 @@ T DeserializeInt(const std::uint8_t* first)
 {
     static_assert(std::is_integral_v<T>);
 
-    T value;
-    auto* ptr = reinterpret_cast<std::uint8_t*>(&value);
+    if constexpr (sizeof(T) == 1) {
+        return static_cast<T>(*first);
+    } else {
+        T value;
+        auto* ptr = reinterpret_cast<std::uint8_t*>(&value);
 
-    std::memcpy(ptr, first, sizeof(T));
+        std::memcpy(ptr, first, sizeof(T));
 
-    if constexpr (bit::endian::native == bit::endian::little && sizeof(T) != 1)
-        value = bit::ntoh(value);
+        if constexpr (bit::endian::native == bit::endian::little)
+            value = bit::ntoh(value);
 
-    return value;
+        return value;
+    }
 }
 
 template <typename T>
@@ -281,6 +279,9 @@ std::size_t DeserializeArray(T& container, const std::uint8_t* first, std::uint8
             return 0;
         }
     }();
+
+    if (container_size == 0)
+        return array_size;
 
     const auto* ptr = reinterpret_cast<const typename T::value_type*>(first + array_size);
 
@@ -309,7 +310,9 @@ std::vector<std::uint8_t> Message::Serialize(const Message& message)
 
     if (total_size != 1) {
         buffer.reserve(total_size);
-        buffer.emplace_back(static_cast<std::uint8_t>(std::min(std::size_t { 0xFF }, std::size(items))));
+
+        const auto item_count = static_cast<std::uint8_t>(std::min(std::size_t { 0xFF }, std::size(items)));
+        detail::SerializeInt(buffer, item_count);
     }
 
     for (const auto& item : items) {
@@ -346,10 +349,13 @@ std::optional<Message> Message::Deserialize(const std::vector<std::uint8_t>& buf
     auto& message = *maybe_message;
 
     if (!buffer.empty()) {
-        message.body.reserve(buffer.front());
+        auto first = std::data(buffer);
+        const auto last = first + std::size(buffer);
 
-        auto first = std::data(buffer) + 1;
-        const auto last = std::data(buffer) + std::size(buffer);
+        const auto item_count = detail::DeserializeInt<std::uint8_t>(first);
+        message.body.reserve(item_count);
+
+        ++first;
 
         while (first < last) {
             auto [item, size] = detail::Decode(*first);
