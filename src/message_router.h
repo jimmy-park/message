@@ -10,25 +10,20 @@
 
 #include "message_handler.h"
 
-class MessageRouter : public Singleton<MessageRouter> {
+class MessageRouter : public Singleton<MessageRouter>, public TaskerBase<MessageRouter, Message> {
 public:
-    MessageRouter();
+    ~MessageRouter();
 
-    void Register(std::string_view id, AbstractMessageHandler* handler);
+    void Register(std::string_view id, MessageHandler handler);
     void Unregister(std::string_view id);
 
-    template <typename... Args>
-    void Post(Args&&... args)
-    {
-        tasker_.Post(std::forward<Args>(args)...);
-    }
-
 private:
-    void OnMessage(Message message);
+    friend TaskerBase;
 
-    std::unordered_map<std::string_view, AbstractMessageHandler*> handlers_;
+    void Process(Message message);
+
+    std::unordered_map<std::string_view, MessageHandler> handlers_;
     std::shared_mutex mutex_;
-    Tasker<Message> tasker_;
 };
 
 #endif // MESSAGE_ROUTER_H_

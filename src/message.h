@@ -22,11 +22,6 @@ struct Message {
     static_assert(std::variant_size_v<Item> <= 0x0F);
 
     Message() = default;
-    ~Message() = default;
-    Message(const Message&) = delete;
-    Message(Message&&) noexcept = default;
-    Message& operator=(const Message&) = delete;
-    Message& operator=(Message&&) noexcept = default;
 
     template <typename Id, typename... Values>
     Message(Id id, Values&&... values)
